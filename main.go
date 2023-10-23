@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/check-payload/dist/releases"
 	"github.com/openshift/check-payload/internal/scan"
 	"github.com/openshift/check-payload/internal/types"
+	"github.com/openshift/check-payload/internal/validations"
 )
 
 const (
@@ -242,10 +243,54 @@ func main() {
 	scanJavaImage.Flags().StringSliceVar(&javaDisabledAlgorithms, "disabled-algorithms", nil, "additional algorithms that java should be disabling in FIPS mode")
 	_ = scanJavaImage.MarkFlagRequired("spec")
 
+	gosyms := &cobra.Command{
+		Use:          "binary [the absolute path to the binary]",
+		Aliases:      []string{"file"},
+		SilenceUsage: true,
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			return scan.ValidateApplicationDependencies(applicationDeps)
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), timeLimit)
+			defer cancel()
+			config.FromTopDir, _ = cmd.Flags().GetString("topdir")
+			config.FromInnerPath, _ = cmd.Flags().GetString("innerpath")
+			config.UseRPMScan = false
+			if config.FromTopDir == "" || config.FromInnerPath == "" {
+				return errors.New("Both -t, --topdir or -i, --innerpath option are required")
+			}
+			res := validations.ScanBinary(ctx, config.FromTopDir, config.FromInnerPath, config.RPMIgnores, config.ErrIgnores)
+			klog.V(1).InfoS("scanning result", res)
+			if res.Skip {
+				return nil
+			}
+			if !res.IsSuccess() && res.RPM != "" && config.IgnoreFileByRpm(config.FromInnerPath, res.RPM) {
+				return nil
+			}
+			if res.IsSuccess() {
+				klog.V(1).InfoS("scanning success", "topDir", config.FromTopDir, "innerPath", config.FromInnerPath, "status", "success")
+			} else {
+				status := res.Status()
+				klog.InfoS("scanning "+status,
+					"path", config.FromInnerPath,
+					"status", status)
+			}
+			newResults := types.NewScanResults()
+			newResults.Append(res)
+			fmt.Printf("res: %v\n", res)
+			fmt.Printf("newResults: %v\n", newResults)
+			results[0] = newResults
+			return nil
+		},
+	}
+	gosyms.Flags().StringP("topdir", "t", "", "top dir of the path to the binary")
+	gosyms.Flags().StringP("innerpath", "i", "", "innerpath of the path to the binary")
+
 	scanCmd.AddCommand(scanPayload)
 	scanCmd.AddCommand(scanJavaImage)
 	scanCmd.AddCommand(scanNode)
 	scanCmd.AddCommand(scanImage)
+	scanCmd.AddCommand(gosyms)
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(scanCmd)

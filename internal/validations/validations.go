@@ -348,7 +348,10 @@ func ScanBinary(ctx context.Context, topDir, innerPath string, rpmIgnores map[st
 
 checks:
 	for _, fn := range checks {
+		fmt.Printf("fn is  %v: ", fn)
 		if err := fn(ctx, path, baton); err != nil {
+			fmt.Printf("err: %v\n", err)
+			fmt.Printf("errIgnores: %v\n", errIgnores)
 			// See if the error is to be ignored.
 			for _, list := range errIgnores {
 				if list.Ignore(innerPath, err.Error) {

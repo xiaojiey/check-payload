@@ -13,6 +13,8 @@ type Config struct {
 	FilterFile              string        `json:"filter_file"`
 	FromFile                string        `json:"from_file"`
 	FromURL                 string        `json:"from_url"`
+	FromTopDir              string        `json:"from_top_dir"`
+	FromInnerPath           string        `json:"from_inner_path"`
 	InsecurePull            bool          `json:"insecure_pull"`
 	Limit                   int           `json:"limit"`
 	ContainerImageComponent string        `json:"container_image_component"`
